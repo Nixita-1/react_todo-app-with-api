@@ -19,36 +19,8 @@ export const Error: React.FC<Props> = ({ errorMessage, setErrorMessage }) => {
         className="delete"
         onClick={() => setErrorMessage('')}
       />
-      {errorMessage === 'Unable to load todos' && (
-        <>
-          Unable to load todos
-          <br />
-        </>
-      )}
-      {errorMessage === 'Title should not be empty' && (
-        <>
-          Title should not be empty
-          <br />
-        </>
-      )}
-      {errorMessage === 'Unable to add a todo' && (
-        <>
-          Unable to add a todo
-          <br />
-        </>
-      )}
-      {errorMessage === 'Unable to delete a todo' && (
-        <>
-          Unable to delete a todo
-          <br />
-        </>
-      )}
-      {errorMessage === 'Unable to update a todo' && (
-        <>
-          Unable to update a todo
-          <br />
-        </>
-      )}
+
+      {errorMessage}
     </div>
   );
 };
