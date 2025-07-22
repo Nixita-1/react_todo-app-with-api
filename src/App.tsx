@@ -1,10 +1,18 @@
+/* eslint-disable prettier/prettier */
+/* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable jsx-a11y/label-has-associated-control */
 /* eslint-disable jsx-a11y/control-has-associated-label */
-import { useCallback, useEffect, useRef, useState } from 'react';
+
+import { useEffect, useRef, useState } from 'react';
 import { UserWarning } from './UserWarning';
-import { deleteTodo, postTodo, updateTodo, USER_ID } from './api/todos';
+import {
+  deleteTodo,
+  postTodo,
+  updateTodo,
+  USER_ID,
+  getTodos,
+} from './api/todos';
 import { Todo } from './types/Todo';
-import { getTodos } from './api/todos';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { Error } from './components/Error';
@@ -13,8 +21,9 @@ import { TodoList } from './components/TodoList';
 
 export const App: React.FC = () => {
   const focusRef = useRef<HTMLInputElement>(null);
+
   const [todos, setTodos] = useState<Todo[]>([]);
-  const [errorMessage, setErrorMessage] = useState<string>('');
+  const [errorMessage, setErrorMessage] = useState('');
   const [todosFilter, setTodosFilter] = useState(FilterType.All);
   const [selectedTodo, setSelectedTodo] = useState<Todo>();
   const [todoBeingAdded, setTodoBeingAdded] = useState(false);
@@ -23,170 +32,119 @@ export const App: React.FC = () => {
   const [deletingIds, setDeletingIds] = useState<number[]>([]);
   const [togglingIds, setTogglingIds] = useState<number[]>([]);
 
-  const filterTodos = (filter: string) => {
-    switch (filter) {
-      case FilterType.Active:
-        return todos.filter(todo => !todo.completed);
-      case FilterType.Completed:
-        return todos.filter(todo => todo.completed);
-      default:
-        return todos;
+  const showError = (message: string) => {
+    setErrorMessage(message);
+    setTimeout(() => setErrorMessage(''), 3000);
+  };
+
+  const loadTodos = async () => {
+    try {
+      const fetchedTodos = await getTodos();
+
+      setTodos(fetchedTodos);
+    } catch {
+      showError('Unable to load todos');
+    } finally {
+      focusRef.current?.focus();
     }
   };
 
-  const filteredTodos = filterTodos(todosFilter);
-
-  const showError = useCallback((errMessage: string) => {
-    if (errMessage) {
-      setErrorMessage(errMessage);
-
-      setTimeout(() => {
-        setErrorMessage('');
-      }, 3000);
-    }
-  }, []);
-
-  const getCompletedTodos = useCallback(() => {
-    return todos.filter(todo => todo.completed);
-  }, [todos]);
-
-  const getAndShowTodos = useCallback(() => {
-    getTodos()
-      .then(toDos => {
-        setTodos(toDos);
-      })
-      .catch(() => {
-        showError('Unable to load todos');
-      })
-      .finally(() => focusRef.current?.focus());
-  }, [showError]);
-
-  const postNewTodo = useCallback(
-    (todoToPost: Todo | null) => {
-      if (todoToPost) {
-        setTodoBeingAdded(true);
-        setTempTodo({
-          id: 0,
-          userId: USER_ID,
-          title: todoToPost.title,
-          completed: todoToPost.completed,
-        });
-
-        postTodo(todoToPost)
-          .then(postedTodo => {
-            setTodos([...(todos || []), postedTodo]);
-            setClearInput(true);
-          })
-          .catch(() => {
-            showError('Unable to add a todo');
-          })
-          .finally(() => {
-            setTodoBeingAdded(false);
-            setTempTodo(null);
-            focusRef.current?.focus();
-          });
-      }
-    },
-    [todos, showError],
-  );
-
-  const deleteChosenTodo = useCallback(
-    async (currentTodoToDelete: Todo | null) => {
-      if (!currentTodoToDelete) {
-        return;
-      }
-
-      try {
-        await deleteTodo(currentTodoToDelete);
-        setTodos(prevTodos =>
-          prevTodos.filter(todo => todo.id !== currentTodoToDelete.id),
-        );
-        if (currentTodoToDelete === selectedTodo) {
-          setSelectedTodo(undefined);
-        } else {
-          focusRef.current?.focus();
-        }
-      } catch {
-        showError('Unable to delete a todo');
-      }
-    },
-    [showError, selectedTodo],
-  );
-
-  const deleteCompletedTodos = useCallback(() => {
-    const completedTodos = getCompletedTodos();
-
-    completedTodos.forEach(todo => {
-      deleteChosenTodo(todo);
-    });
-
-    focusRef.current?.focus();
-  }, [getCompletedTodos, deleteChosenTodo]);
-
-  const updateChosenTodo = useCallback(
-    (todoSetToUpdate: Todo | null) => {
-      if (todoSetToUpdate) {
-        updateTodo(todoSetToUpdate)
-          .then(() => {
-            setTodos(
-              todos?.map(todo =>
-                todo.id === todoSetToUpdate.id ? todoSetToUpdate : todo,
-              ),
-            );
-          })
-          .catch(() => {
-            showError('Unable to update a todo');
-          })
-          .finally(() => {
-            if (todoSetToUpdate === selectedTodo) {
-              setSelectedTodo(undefined);
-            }
-
-            focusRef.current?.focus();
-          });
-      }
-    },
-    [todos, showError, selectedTodo],
-  );
-
-  const toggleTodoCompletedStatus = useCallback(async () => {
-    let completed = false;
-
-    if (getCompletedTodos() && getCompletedTodos().length < todos.length) {
-      completed = true;
+  const handlePostTodo = async (todoToPost: Todo | null) => {
+    if (!todoToPost) {
+      return;
     }
 
-    const results = await Promise.allSettled(
-      todos.map(todo => {
-        if (todo.completed !== completed) {
-          updateTodo({
-            id: todo.id,
-            title: todo.title,
-            userId: USER_ID,
-            completed: completed,
-          });
-        }
-      }),
+    setTodoBeingAdded(true);
+    setTempTodo({ ...todoToPost, id: 0 });
+
+    try {
+      const newTodo = await postTodo(todoToPost);
+
+      setTodos(prev => [...prev, newTodo]);
+      setClearInput(true);
+    } catch {
+      showError('Unable to add a todo');
+    } finally {
+      setTodoBeingAdded(false);
+      setTempTodo(null);
+      focusRef.current?.focus();
+    }
+  };
+
+  const handleDeleteTodo = async (todoToDelete: Todo | null) => {
+    if (!todoToDelete) {
+      return;
+    }
+
+    try {
+      await deleteTodo(todoToDelete);
+      setTodos(prev => prev.filter(t => t.id !== todoToDelete.id));
+
+      if (todoToDelete === selectedTodo) {
+        setSelectedTodo(undefined);
+      }
+    } catch {
+      showError('Unable to delete a todo');
+    } finally {
+      focusRef.current?.focus();
+    }
+  };
+
+  const handleUpdateTodo = async (todoToUpdate: Todo | null) => {
+    if (!todoToUpdate) {
+      return;
+    }
+
+    try {
+      await updateTodo(todoToUpdate);
+      setTodos(prev =>
+        prev.map(todo => (todo.id === todoToUpdate.id ? todoToUpdate : todo)),
+      );
+    } catch {
+      showError('Unable to update a todo');
+    } finally {
+      if (todoToUpdate === selectedTodo) {
+        setSelectedTodo(undefined);
+      }
+
+      focusRef.current?.focus();
+    }
+  };
+
+  const handleToggleAll = async () => {
+    const shouldComplete = todos.some(todo => !todo.completed);
+
+    const updateOps = todos.map(todo =>
+      todo.completed !== shouldComplete
+        ? updateTodo({ ...todo, completed: shouldComplete })
+        : Promise.resolve(),
     );
 
-    results.forEach(result => {
-      if (result.status === 'fulfilled') {
-        setTodos(prevTodos =>
-          prevTodos.map(t => ({
-            ...t,
-            completed: completed,
-          })),
-        );
-      } else {
-        showError('Unable to update a todo');
-      }
-    });
-    setTimeout(() => {
-      setTogglingIds([]);
-    }, 100);
+    const results = await Promise.allSettled(updateOps);
 
+    if (results.some(r => r.status === 'rejected')) {
+      showError('Unable to update some todos');
+    }
+
+    setTodos(prev =>
+      prev.map(todo => ({ ...todo, completed: shouldComplete })),
+    );
+
+    setTogglingIds([]);
     focusRef.current?.focus();
-  }, [showError, todos, getCompletedTodos]);
+  };
+
+  const handleDeleteCompleted = () => {
+    todos.filter(t => t.completed).forEach(handleDeleteTodo);
+    focusRef.current?.focus();
+  };
+
+  const filteredTodos =
+    todosFilter === FilterType.All
+      ? todos
+      : todos.filter(todo =>
+        todosFilter === FilterType.Active ? !todo.completed : todo.completed,
+      );
 
   useEffect(() => {
     if (!todoBeingAdded) {
@@ -195,8 +153,8 @@ export const App: React.FC = () => {
   }, [todoBeingAdded]);
 
   useEffect(() => {
-    getAndShowTodos();
-  }, [getAndShowTodos]);
+    loadTodos();
+  }, []);
 
   if (!USER_ID) {
     return <UserWarning />;
@@ -210,12 +168,12 @@ export const App: React.FC = () => {
         <Header
           focusRef={focusRef}
           todos={todos}
-          postNewTodo={postNewTodo}
+          postNewTodo={handlePostTodo}
           showError={showError}
           todoBeingAdded={todoBeingAdded}
           clearInput={clearInput}
           setClearInput={setClearInput}
-          toggleTodoCompletedStatus={toggleTodoCompletedStatus}
+          toggleTodoCompletedStatus={handleToggleAll}
           setTogglingIds={setTogglingIds}
         />
 
@@ -223,19 +181,19 @@ export const App: React.FC = () => {
           filteredTodos={filteredTodos}
           selectedTodo={selectedTodo}
           setSelectedTodo={setSelectedTodo}
-          deleteChosenTodo={deleteChosenTodo}
+          deleteChosenTodo={handleDeleteTodo}
           tempTodo={tempTodo}
-          updateChosenTodo={updateChosenTodo}
+          updateChosenTodo={handleUpdateTodo}
           deletingIds={deletingIds}
           togglingIds={togglingIds}
         />
 
-        {todos.length !== 0 && (
+        {todos.length > 0 && (
           <Footer
             todos={todos}
             todosFilter={todosFilter}
             setTodosFilter={setTodosFilter}
-            deleteCompletedTodos={deleteCompletedTodos}
+            deleteCompletedTodos={handleDeleteCompleted}
             setDeletingIds={setDeletingIds}
           />
         )}
